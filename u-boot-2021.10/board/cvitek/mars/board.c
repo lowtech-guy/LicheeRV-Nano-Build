@@ -7,8 +7,13 @@
 
 #include <common.h>
 #include <dm.h>
+#include <dm/uclass.h>
+#include <env.h>
+#include <i2c.h>
 #include <malloc.h>
 #include <errno.h>
+#include <net.h>
+#include <u-boot/md5.h>
 #include <asm/io.h>
 #include <linux/compiler.h>
 #if defined(__aarch64__)
@@ -22,6 +27,7 @@
 #include "mars_pinlist_swconfig.h"
 #include <linux/delay.h>
 #include <bootstage.h>
+#include <cvi_efuse.h>
 
 #if defined(__riscv)
 #include <asm/csr.h>
@@ -246,6 +252,384 @@ int board_init(void)
 	cvi_board_init();
 	return 0;
 }
+
+#if defined(__riscv)
+#define CVITEK_UID_WORD3_OFFSET	0x0c
+#define CVITEK_UID_WORD4_OFFSET	0x10
+#define CVITEK_UID_STRING_LEN	17
+
+#define ONEKVM_PCIE_OLED_ADDR		0x3c
+#define ONEKVM_PCIE_OLED_WIDTH		64
+#define ONEKVM_PCIE_OLED_PAGES		4
+#define ONEKVM_PCIE_OLED_COLUMN_OFFSET	32
+#define ONEKVM_PCIE_OLED_PAGE_OFFSET	8
+#define ONEKVM_CUBE_OLED_ADDR		0x3d
+#define ONEKVM_CUBE_OLED_WIDTH		128
+#define ONEKVM_CUBE_OLED_PAGES		8
+#define ONEKVM_CUBE_OLED_COLUMN_OFFSET	0
+#define ONEKVM_CUBE_OLED_PAGE_OFFSET	0
+#define ONEKVM_OLED_MAX_WIDTH		ONEKVM_CUBE_OLED_WIDTH
+#define ONEKVM_OLED_ENABLE_GPIO		22
+#define ONEKVM_OLED_PROBE_ATTEMPTS	4
+#define ONEKVM_OLED_PROBE_DELAY_MS	5
+#define CVITEK_GPIOA_DR			0x03020000
+#define CVITEK_GPIOA_DDR		0x03020004
+#define CVITEK_GPIOA_EXT		0x03020050
+
+/*
+ * Captured from assets/canvases/uboot-pcie.json in the NanoKVM OLED
+ * extension: "BOOTING" / "PLEASE WAIT", 64x32, rotation 0 degrees.
+ */
+static const u8 onekvm_pcie_oled_boot_frame[] = {
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x3e, 0x2a, 0x2a, 0x2a, 0x14,
+	0x00, 0x1c, 0x22, 0x22, 0x22, 0x1c, 0x00, 0x1c,
+	0x22, 0x22, 0x22, 0x1c, 0x00, 0x02, 0x02, 0x3e,
+	0x02, 0x02, 0x00, 0x22, 0x22, 0x3e, 0x22, 0x22,
+	0x00, 0x3e, 0x04, 0x08, 0x10, 0x3e, 0x00, 0x1c,
+	0x22, 0x2a, 0x2a, 0x3a, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x3e, 0x0a, 0x0a, 0x0a, 0x04, 0x00, 0x3e, 0x20,
+	0x20, 0x20, 0x20, 0x00, 0x3e, 0x2a, 0x2a, 0x2a,
+	0x22, 0x00, 0x3c, 0x0a, 0x0a, 0x0a, 0x3c, 0x00,
+	0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, 0x3e, 0x2a,
+	0x2a, 0x2a, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x3e, 0x10, 0x08, 0x10, 0x3e, 0x00, 0x3c, 0x0a,
+	0x0a, 0x0a, 0x3c, 0x00, 0x22, 0x22, 0x3e, 0x22,
+	0x22, 0x00, 0x02, 0x02, 0x3e, 0x02, 0x02, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+
+/*
+ * Rendered from assets/canvases/uboot-cube.json in the NanoKVM OLED
+ * extension.  The source is the Cube's active two-layer canvas:
+ * "PLEASE WAIT" / "BOOTING", 128x64, rotation 0 degrees.  The byte pairs
+ * are run length followed by value and expand to 1024 controller bytes.
+ * Source canvas SHA-256:
+ * d880d157a64a8cce20b889a23ddc4727ac18131186a2776f5a063199a8827699
+ */
+static const u8 onekvm_cube_oled_boot_frame_rle[] = {
+	0xff, 0x00, 0x02, 0x00, 0x02, 0xfe, 0x06, 0x66,
+	0x02, 0x18, 0x02, 0x00, 0x02, 0xfe, 0x0a, 0x00,
+	0x02, 0xfe, 0x06, 0x66, 0x02, 0x06, 0x02, 0x00,
+	0x02, 0xf8, 0x06, 0x66, 0x02, 0xf8, 0x02, 0x00,
+	0x02, 0x18, 0x06, 0x66, 0x02, 0x86, 0x02, 0x00,
+	0x02, 0xfe, 0x06, 0x66, 0x02, 0x06, 0x0a, 0x00,
+	0x02, 0xfe, 0x02, 0x80, 0x02, 0x60, 0x02, 0x80,
+	0x02, 0xfe, 0x02, 0x00, 0x02, 0xf8, 0x06, 0x66,
+	0x02, 0xf8, 0x02, 0x00, 0x04, 0x06, 0x02, 0xfe,
+	0x04, 0x06, 0x02, 0x00, 0x04, 0x06, 0x02, 0xfe,
+	0x04, 0x06, 0x02, 0x00, 0x02, 0x07, 0x0a, 0x00,
+	0x02, 0x07, 0x08, 0x06, 0x02, 0x00, 0x02, 0x07,
+	0x08, 0x06, 0x02, 0x00, 0x02, 0x07, 0x06, 0x00,
+	0x02, 0x07, 0x02, 0x00, 0x08, 0x06, 0x02, 0x01,
+	0x02, 0x00, 0x02, 0x07, 0x08, 0x06, 0x0a, 0x00,
+	0x02, 0x07, 0x02, 0x01, 0x02, 0x00, 0x02, 0x01,
+	0x02, 0x07, 0x02, 0x00, 0x02, 0x07, 0x06, 0x00,
+	0x02, 0x07, 0x02, 0x00, 0x04, 0x06, 0x02, 0x07,
+	0x04, 0x06, 0x06, 0x00, 0x02, 0x07, 0x1c, 0x00,
+	0x02, 0xe0, 0x06, 0x60, 0x02, 0x80, 0x02, 0x00,
+	0x02, 0x80, 0x06, 0x60, 0x02, 0x80, 0x02, 0x00,
+	0x02, 0x80, 0x06, 0x60, 0x02, 0x80, 0x02, 0x00,
+	0x04, 0x60, 0x02, 0xe0, 0x04, 0x60, 0x02, 0x00,
+	0x04, 0x60, 0x02, 0xe0, 0x04, 0x60, 0x02, 0x00,
+	0x02, 0xe0, 0x02, 0x80, 0x04, 0x00, 0x02, 0xe0,
+	0x02, 0x00, 0x02, 0x80, 0x08, 0x60, 0x2e, 0x00,
+	0x02, 0x7f, 0x06, 0x66, 0x02, 0x19, 0x02, 0x00,
+	0x02, 0x1f, 0x06, 0x60, 0x02, 0x1f, 0x02, 0x00,
+	0x02, 0x1f, 0x06, 0x60, 0x02, 0x1f, 0x06, 0x00,
+	0x02, 0x7f, 0x06, 0x00, 0x04, 0x60, 0x02, 0x7f,
+	0x04, 0x60, 0x02, 0x00, 0x02, 0x7f, 0x02, 0x01,
+	0x02, 0x06, 0x02, 0x18, 0x02, 0x7f, 0x02, 0x00,
+	0x02, 0x1f, 0x02, 0x60, 0x04, 0x66, 0x02, 0x7e,
+	0xff, 0x00, 0x18, 0x00,
+};
+
+struct onekvm_oled_profile {
+	const char *name;
+	u8 address;
+	u8 width;
+	u8 pages;
+	u8 column_offset;
+	u8 page_offset;
+	u8 segment_remap;
+	u8 com_scan;
+	const u8 *frame;
+	size_t frame_size;
+	bool frame_is_rle;
+};
+
+static const struct onekvm_oled_profile onekvm_pcie_oled = {
+	.name = "PCIe",
+	.address = ONEKVM_PCIE_OLED_ADDR,
+	.width = ONEKVM_PCIE_OLED_WIDTH,
+	.pages = ONEKVM_PCIE_OLED_PAGES,
+	.column_offset = ONEKVM_PCIE_OLED_COLUMN_OFFSET,
+	.page_offset = ONEKVM_PCIE_OLED_PAGE_OFFSET,
+	.segment_remap = 0xa0,
+	.com_scan = 0xc0,
+	.frame = onekvm_pcie_oled_boot_frame,
+	.frame_size = ARRAY_SIZE(onekvm_pcie_oled_boot_frame),
+	.frame_is_rle = false,
+};
+
+static const struct onekvm_oled_profile onekvm_cube_oled = {
+	.name = "Cube",
+	.address = ONEKVM_CUBE_OLED_ADDR,
+	.width = ONEKVM_CUBE_OLED_WIDTH,
+	.pages = ONEKVM_CUBE_OLED_PAGES,
+	.column_offset = ONEKVM_CUBE_OLED_COLUMN_OFFSET,
+	.page_offset = ONEKVM_CUBE_OLED_PAGE_OFFSET,
+	.segment_remap = 0xa1,
+	.com_scan = 0xc8,
+	.frame = onekvm_cube_oled_boot_frame_rle,
+	.frame_size = ARRAY_SIZE(onekvm_cube_oled_boot_frame_rle),
+	.frame_is_rle = true,
+};
+
+static void onekvm_prepare_oled(void)
+{
+	/* GPIO-I2C: SCL=A15, SDA=A27; OLED enable/reset: A22. */
+	PINMUX_CONFIG(SPK_EN, XGPIOA_15);
+	PINMUX_CONFIG(EMMC_DAT3, XGPIOA_27);
+	PINMUX_CONFIG(EMMC_CLK, XGPIOA_22);
+
+	/* Give the controller a defined reset/power cycle before probing it. */
+	mmio_clrbits_32(CVITEK_GPIOA_DR, BIT(ONEKVM_OLED_ENABLE_GPIO));
+	mmio_setbits_32(CVITEK_GPIOA_DDR, BIT(ONEKVM_OLED_ENABLE_GPIO));
+	mdelay(1);
+	mmio_setbits_32(CVITEK_GPIOA_DR, BIT(ONEKVM_OLED_ENABLE_GPIO));
+	mdelay(ONEKVM_OLED_PROBE_DELAY_MS);
+}
+
+static int onekvm_oled_probe(struct udevice *bus, u8 address)
+{
+	struct dm_i2c_ops *ops = i2c_get_ops(bus);
+	struct i2c_msg message = {
+		.addr = address,
+		.flags = 0,
+		.len = 0,
+		.buf = NULL,
+	};
+	int ret;
+
+	if (ops->probe_chip) {
+		ret = ops->probe_chip(bus, address, 0);
+		if (ret != -ENOSYS)
+			return ret;
+	}
+	if (!ops->xfer)
+		return -ENOSYS;
+	return ops->xfer(bus, &message, 1);
+}
+
+static int onekvm_oled_write(struct udevice *bus, u8 address, u8 control,
+			     const u8 *payload, size_t length)
+{
+	struct dm_i2c_ops *ops = i2c_get_ops(bus);
+	u8 transfer[ONEKVM_OLED_MAX_WIDTH + 1];
+	struct i2c_msg message = {
+		.addr = address,
+		.flags = 0,
+		.len = length + 1,
+		.buf = transfer,
+	};
+
+	if (length > ONEKVM_OLED_MAX_WIDTH)
+		return -EINVAL;
+	if (!ops->xfer)
+		return -ENOSYS;
+	transfer[0] = control;
+	memcpy(transfer + 1, payload, length);
+	return ops->xfer(bus, &message, 1);
+}
+
+static int onekvm_oled_probe_retries(struct udevice *bus, u8 address)
+{
+	int attempt;
+	int ret = -ENODEV;
+
+	for (attempt = 1; attempt <= ONEKVM_OLED_PROBE_ATTEMPTS; ++attempt) {
+		ret = onekvm_oled_probe(bus, address);
+		if (!ret)
+			break;
+		if (attempt < ONEKVM_OLED_PROBE_ATTEMPTS)
+			mdelay(ONEKVM_OLED_PROBE_DELAY_MS);
+	}
+	return ret;
+}
+
+static int onekvm_show_oled(const char **detected_name)
+{
+	static const u8 init_sequence[] = {
+		0xae, 0x00, 0x10, 0x40, 0x81, 0xcf, 0xa1, 0xc8,
+		0xa6, 0xa8, 0x3f, 0xd3, 0x00, 0xd5, 0x80, 0xd9,
+		0xf1, 0xda, 0x12, 0xdb, 0x40, 0x20, 0x02, 0x8d,
+		0x14, 0xa4, 0xa6, 0xaf,
+	};
+	static const struct onekvm_oled_profile * const profiles[] = {
+		&onekvm_cube_oled,
+		&onekvm_pcie_oled,
+	};
+	const struct onekvm_oled_profile *profile = NULL;
+	struct udevice *bus;
+	u8 page_frame[ONEKVM_OLED_MAX_WIDTH];
+	size_t rle_index = 0;
+	unsigned int run_remaining = 0;
+	u8 run_value = 0;
+	ofnode node;
+	size_t candidate;
+	int page;
+	int ret;
+
+	onekvm_prepare_oled();
+	node = ofnode_path("/i2c5@gpio");
+	if (!ofnode_valid(node))
+		return -ENOENT;
+	ret = uclass_get_device_by_ofnode(UCLASS_I2C, node, &bus);
+	if (ret)
+		return ret;
+	for (candidate = 0; candidate < ARRAY_SIZE(profiles); ++candidate) {
+		ret = onekvm_oled_probe_retries(bus,
+						profiles[candidate]->address);
+		if (!ret) {
+			profile = profiles[candidate];
+			break;
+		}
+	}
+	if (!profile) {
+		printf("OneKVM: OLED probes at 0x%02x/0x%02x failed "
+		       "(last=%d), GPIOA DR=%08x DDR=%08x EXT=%08x\n",
+		       ONEKVM_CUBE_OLED_ADDR, ONEKVM_PCIE_OLED_ADDR, ret,
+		       mmio_read_32(CVITEK_GPIOA_DR),
+		       mmio_read_32(CVITEK_GPIOA_DDR),
+		       mmio_read_32(CVITEK_GPIOA_EXT));
+		return -ENODEV;
+	}
+	if (detected_name)
+		*detected_name = profile->name;
+
+	ret = onekvm_oled_write(bus, profile->address, 0x00, init_sequence,
+				 ARRAY_SIZE(init_sequence));
+	if (ret)
+		return ret;
+	{
+		const u8 direction[] = { profile->segment_remap,
+					 profile->com_scan };
+
+		ret = onekvm_oled_write(bus, profile->address, 0x00,
+					 direction, ARRAY_SIZE(direction));
+		if (ret)
+			return ret;
+	}
+
+	if (!profile->frame_is_rle &&
+	    profile->frame_size != profile->width * profile->pages)
+		return -EINVAL;
+	for (page = 0; page < profile->pages; ++page) {
+		const u8 position[] = {
+			0xb0 + profile->page_offset + page,
+			0x10 | (profile->column_offset >> 4),
+			profile->column_offset & 0x0f,
+		};
+		int column = 0;
+
+		if (profile->frame_is_rle) {
+			while (column < profile->width) {
+				unsigned int count;
+
+				if (!run_remaining) {
+					if (rle_index + 2 > profile->frame_size)
+						return -EINVAL;
+					run_remaining = profile->frame[rle_index++];
+					run_value = profile->frame[rle_index++];
+					if (!run_remaining)
+						return -EINVAL;
+				}
+				count = profile->width - column;
+				if (count > run_remaining)
+					count = run_remaining;
+				memset(page_frame + column, run_value, count);
+				column += count;
+				run_remaining -= count;
+			}
+		} else {
+			memcpy(page_frame, profile->frame + page * profile->width,
+			       profile->width);
+		}
+
+		ret = onekvm_oled_write(bus, profile->address, 0x00, position,
+					 ARRAY_SIZE(position));
+		if (ret)
+			return ret;
+		ret = onekvm_oled_write(bus, profile->address, 0x40,
+					 page_frame, profile->width);
+		if (ret)
+			return ret;
+	}
+	if (profile->frame_is_rle &&
+	    (run_remaining || rle_index != profile->frame_size))
+		return -EINVAL;
+
+	return 0;
+}
+
+static int cvitek_set_ethaddr_from_uid(u8 mac[ARP_HLEN])
+{
+	s64 uid_3;
+	s64 uid_4;
+	char uid[CVITEK_UID_STRING_LEN + 1];
+	u8 digest[MD5_SUM_LEN];
+
+	uid_3 = cvi_efuse_read_from_shadow(CVITEK_UID_WORD3_OFFSET);
+	uid_4 = cvi_efuse_read_from_shadow(CVITEK_UID_WORD4_OFFSET);
+	if (uid_3 < 0 || uid_4 < 0)
+		return -EIO;
+
+	snprintf(uid, sizeof(uid), "%08x_%08x", (u32)uid_3, (u32)uid_4);
+	md5((unsigned char *)uid, strlen(uid), digest);
+	memcpy(mac, digest, ARP_HLEN);
+	mac[0] = (mac[0] & 0xfe) | 0x02;
+
+	if (!is_valid_ethaddr(mac))
+		return -EINVAL;
+
+	return eth_env_set_enetaddr("ethaddr", mac);
+}
+
+int misc_init_r(void)
+{
+	u8 mac[ARP_HLEN];
+	int ret;
+
+	ret = cvitek_set_ethaddr_from_uid(mac);
+	if (ret) {
+		printf("OneKVM: failed to derive ethaddr from chip UID: %d\n",
+		       ret);
+	} else {
+		printf("OneKVM: ethaddr=%02x:%02x:%02x:%02x:%02x:%02x "
+		       "(chip UID)\n",
+		       mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	}
+
+	return 0;
+}
+#endif
 
 #if defined(__aarch64__)
 int dram_init(void)

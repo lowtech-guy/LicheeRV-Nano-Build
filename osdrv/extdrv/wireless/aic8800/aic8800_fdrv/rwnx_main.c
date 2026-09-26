@@ -522,7 +522,7 @@ static const int rwnx_hwq2uapsd[NL80211_NUM_ACS] = {
 
 
 extern uint8_t scanning;
-int aicwf_dbg_level = LOGERROR|LOGINFO|LOGDEBUG|LOGTRACE|LOGFW;
+int aicwf_dbg_level = LOGERROR|LOGINFO;
 module_param(aicwf_dbg_level, int, 0660);
 int testmode = 0;
 char aic_fw_path[200];
@@ -798,7 +798,7 @@ static void rwnx_csa_finish(struct work_struct *ws)
 			rwnx_txq_vif_stop(vif, RWNX_TXQ_STOP_CHAN, rwnx_hw);
 		spin_unlock_bh(&rwnx_hw->cb_lock);
 #if (LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION3)
-		cfg80211_ch_switch_notify(vif->ndev, &csa->chandef, 0, 0);
+		cfg80211_ch_switch_notify(vif->ndev, &csa->chandef, 0);
 #elif (LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION)
 		cfg80211_ch_switch_notify(vif->ndev, &csa->chandef, 0);
 #else
@@ -1728,7 +1728,7 @@ void aicwf_p2p_alive_timeout(struct timer_list *t)
 	rwnx_vif = (struct rwnx_vif *)data;
 	rwnx_hw = rwnx_vif->rwnx_hw;
 	#else
-	rwnx_hw = from_timer(rwnx_hw, t, p2p_alive_timer);
+	rwnx_hw = timer_container_of(rwnx_hw, t, p2p_alive_timer);
 	rwnx_vif = rwnx_hw->p2p_dev_vif;
 	#endif
 
@@ -2164,7 +2164,7 @@ static void rwnx_cfgp2p_stop_p2p_device(struct wiphy *wiphy, struct wireless_dev
 	if (rwnx_vif == rwnx_hw->p2p_dev_vif) {
 		rwnx_hw->is_p2p_alive = 0;
 		if (timer_pending(&rwnx_hw->p2p_alive_timer)) {
-			del_timer_sync(&rwnx_hw->p2p_alive_timer);
+			timer_delete_sync(&rwnx_hw->p2p_alive_timer);
 		}
 
 		if (rwnx_vif->up) {
@@ -3457,8 +3457,9 @@ end:
  *	interface. This should reject the call when AP mode wasn't started.
  */
 static int rwnx_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *dev,
-									   struct cfg80211_beacon_data *info)
+									   struct cfg80211_ap_update *update)
 {
+	struct cfg80211_beacon_data *info = &update->beacon;
 	struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
 	struct rwnx_vif *vif = netdev_priv(dev);
 	struct rwnx_bcn *bcn = &vif->ap.bcn;
@@ -3510,7 +3511,7 @@ static int rwnx_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev)
 	rwnx_vif->ap.start = false;
 	aicwf_nl_hook_deinit(rwnx_vif->ap.band, rwnx_vif->rwnx_hw->iface_idx);
 	if (timer_pending(&rwnx_vif->steer_timer))
-		del_timer_sync(&rwnx_vif->steer_timer);
+		timer_delete_sync(&rwnx_vif->steer_timer);
 	cancel_work_sync(&rwnx_vif->steer_work);
 #if 0
 	flush_workqueue(rwnx_vif->rsp_wq);
@@ -3549,7 +3550,7 @@ static int rwnx_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev)
  * Also called internaly with chandef set to NULL simply to retrieve the channel
  * configured at firmware level.
  */
-static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy,
+static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy, struct net_device *dev,
 											 struct cfg80211_chan_def *chandef)
 {
 	struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
@@ -3604,7 +3605,7 @@ static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy,
 
 int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
                                              struct cfg80211_chan_def *chandef){
-    return rwnx_cfg80211_set_monitor_channel(wiphy, chandef);
+    return rwnx_cfg80211_set_monitor_channel(wiphy, NULL, chandef);
 }
 
 
@@ -3661,7 +3662,7 @@ void rwnx_cfg80211_mgmt_frame_register(struct wiphy *wiphy,
  *	have changed. The actual parameter values are available in
  *	struct wiphy. If returning an error, no value should be changed.
  */
-static int rwnx_cfg80211_set_wiphy_params(struct wiphy *wiphy, u32 changed)
+static int rwnx_cfg80211_set_wiphy_params(struct wiphy *wiphy, int radio_idx, u32 changed)
 {
 	return 0;
 }
@@ -3674,7 +3675,7 @@ static int rwnx_cfg80211_set_wiphy_params(struct wiphy *wiphy, u32 changed)
  *	always be %NULL unless the driver supports per-vif TX power
  *	(as advertised by the nl80211 feature flag.)
  */
-static int rwnx_cfg80211_set_tx_power(struct wiphy *wiphy, struct wireless_dev *wdev,
+static int rwnx_cfg80211_set_tx_power(struct wiphy *wiphy, struct wireless_dev *wdev, int radio_idx,
 									  enum nl80211_tx_power_setting type, int mbm)
 {
 	struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
@@ -3706,7 +3707,7 @@ static int rwnx_cfg80211_get_tx_power(struct wiphy *wiphy,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)
  struct wireless_dev *wdev,
 #endif
-	int *mbm)
+	int radio_idx, unsigned int link_id, int *mbm)
 {
     #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
     struct wireless_dev *wdev = NULL;
@@ -4023,7 +4024,7 @@ static int rwnx_cfg80211_get_channel(struct wiphy *wiphy,
 
 	if (rwnx_vif->vif_index == rwnx_hw->monitor_vif) {
 		//retrieve channel from firmware
-		rwnx_cfg80211_set_monitor_channel(wiphy, NULL);
+		rwnx_cfg80211_set_monitor_channel(wiphy, NULL, NULL);
 	}
 
 	//Check if channel context is valid
@@ -4167,7 +4168,7 @@ int rwnx_cfg80211_start_radar_detection(struct wiphy *wiphy,
 										struct net_device *dev,
 										struct cfg80211_chan_def *chandef
 									#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 15, 0))
-										, u32 cac_time_ms
+										, u32 cac_time_ms, int link_id
 									#endif
 										)
 {
@@ -4310,7 +4311,7 @@ int rwnx_cfg80211_channel_switch (struct wiphy *wiphy,
 	} else {
 		INIT_WORK(&csa->work, rwnx_csa_finish);
 #if LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION4
-		cfg80211_ch_switch_started_notify(dev, &csa->chandef, 0, params->count, false, 0);
+		cfg80211_ch_switch_started_notify(dev, &csa->chandef, 0, params->count, false);
 #elif LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION2
 		cfg80211_ch_switch_started_notify(dev, &csa->chandef, 0, params->count, false);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
@@ -4339,7 +4340,7 @@ static int
 rwnx_cfg80211_tdls_mgmt(struct wiphy *wiphy,
 	struct net_device *dev,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
-	const u8 *peer,
+	const u8 *peer, int link_id,
 #else
 	u8 *peer,
 #endif
@@ -6141,7 +6142,7 @@ void rwnx_cfg80211_deinit(struct rwnx_hw *rwnx_hw)
 		list_for_each_entry(defrag_ctrl, &rwnx_hw->defrag_list, list) {
 			list_del_init(&defrag_ctrl->list);
 			if (timer_pending(&defrag_ctrl->defrag_timer))
-				del_timer_sync(&defrag_ctrl->defrag_timer);
+				timer_delete_sync(&defrag_ctrl->defrag_timer);
 			dev_kfree_skb(defrag_ctrl->skb);
 			kfree(defrag_ctrl);
 		}
@@ -6272,7 +6273,7 @@ static void __exit rwnx_mod_exit(void)
 
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
-MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
+MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
 #endif
 
 module_init(rwnx_mod_init);

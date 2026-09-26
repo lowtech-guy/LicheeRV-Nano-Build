@@ -159,7 +159,6 @@ int bt_sdio_recv(u8 *data,u32 data_len)
 		//kfree_skb(skb);
 		///return 0;
 	//}
-	AICBT_INFO("skb type %d",type);
 	//bt_data_dump("bt_skb", skb, skb->len);
 	ret = hci_recv_frame(hdev, skb);
 	if(ret < 0){
@@ -203,8 +202,6 @@ static int btsdio_flush(struct hci_dev *hdev)
 static int btsdio_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 {
 	struct btsdio_data *data = hci_get_drvdata(hdev);
-
-	AICBT_INFO("%s,%s", hdev->name,__func__);
 
 	switch (hci_skb_pkt_type(skb)) {
 	case HCI_COMMAND_PKT:
@@ -254,7 +251,6 @@ int btsdio_init(void)
 	hdev->bus = HCI_SDIO;
 	hci_set_drvdata(hdev, data);
 
-	hdev->dev_type = HCI_PRIMARY;
 
 	data->hdev = hdev;
 

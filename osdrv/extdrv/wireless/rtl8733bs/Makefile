@@ -2435,6 +2435,7 @@ rtk_core += core/rtw_sdio.o
 endif
 
 EXTRA_CFLAGS += -I$(src)/core/crypto
+ccflags-y += $(EXTRA_CFLAGS)
 rtk_core += \
 		core/crypto/aes-internal.o \
 		core/crypto/aes-internal-enc.o \

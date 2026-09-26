@@ -207,8 +207,10 @@
 
 	i2c5: i2c5@gpio {
 		compatible = "i2c-gpio";
-                scl-gpios = <&porta 15 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-                sda-gpios = <&porta 27 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		gpios = <&porta 27 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>,
+			<&porta 15 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
                 i2c-gpio,delay-us = <5>;
                 status = "okay";
 	};

@@ -67,7 +67,7 @@ bl1_entrypoint_rel:
 
   # set mxstatus to init value
   li x3, 0xc0638000
-  csrw mxstatus, x3
+  csrw 0x7c0, x3
 
   # set plic_ctrl = 1 for linux plic
   li x3, 0x701FFFFC # plic_base + 0x1FFFFC
@@ -76,13 +76,13 @@ bl1_entrypoint_rel:
 
   // invalidate all memory for BTB,BHT,DCACHE,ICACHE
   li x3, 0x30013
-  csrs mcor, x3
+  csrs 0x7c2, x3
   // enable ICACHE,DCACHE,BHT,BTB,RAS,WA
   li x3, 0x7f
-  csrs mhcr, x3
+  csrs 0x7c1, x3
   // enable data_cache_prefetch, amr
   li x3, 0x610c
-  csrs mhint, x3 #mhint
+  csrs 0x7c5, x3 # mhint
 
   # enable fp
   li x3, 0x1 << 13

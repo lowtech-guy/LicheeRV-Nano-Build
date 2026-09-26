@@ -8,6 +8,7 @@
 #include <linux/skbuff.h>
 #include <linux/dcache.h>
 #include <linux/version.h>
+#include <linux/timer.h>
 #include <net/sock.h>
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>
@@ -284,22 +285,22 @@ static void rtk_check_del_timer(int8_t profile_index)
 {
 	if (profile_a2dp == profile_index) {
 		btrtl_coex.a2dp_packet_count = 0;
-		del_timer_sync(&btrtl_coex.a2dp_count_timer);
+		timer_delete_sync(&btrtl_coex.a2dp_count_timer);
 	}
 	if (profile_pan == profile_index) {
 		btrtl_coex.pan_packet_count = 0;
-		del_timer_sync(&btrtl_coex.pan_count_timer);
+		timer_delete_sync(&btrtl_coex.pan_count_timer);
 	}
 	if (profile_hogp == profile_index) {
 		btrtl_coex.hogp_packet_count = 0;
 		if (btrtl_coex.profile_refcount[profile_voice] == 0) {
-			del_timer_sync(&btrtl_coex.hogp_count_timer);
+			timer_delete_sync(&btrtl_coex.hogp_count_timer);
 		}
 	}
 	if (profile_voice == profile_index) {
 		btrtl_coex.voice_packet_count = 0;
 		if (btrtl_coex.profile_refcount[profile_hogp] == 0) {
-			del_timer_sync(&btrtl_coex.hogp_count_timer);
+			timer_delete_sync(&btrtl_coex.hogp_count_timer);
 		}
 	}
 }
@@ -2630,7 +2631,7 @@ static void rtk_handle_bt_info_control(uint8_t *p)
 
 	/* Close bt info polling timer */
 	if (!ctl->polling_enable && btrtl_coex.polling_enable)
-		del_timer(&btrtl_coex.polling_timer);
+		timer_delete(&btrtl_coex.polling_timer);
 
 	if (btrtl_coex.autoreport != ctl->autoreport_enable) {
 		temp_cmd[0] = HCI_VENDOR_SUB_CMD_BT_AUTO_REPORT_ENABLE;
@@ -2769,7 +2770,7 @@ static void rtk_handle_event_from_wifi(uint8_t * msg)
 		rtkbt_coexmsg_send(leave_ack, sizeof(leave_ack));
 		if (btrtl_coex.polling_enable) {
 			btrtl_coex.polling_enable = 0;
-			del_timer(&btrtl_coex.polling_timer);
+			timer_delete(&btrtl_coex.polling_timer);
 		}
 	}
 
@@ -2921,13 +2922,13 @@ void rtk_btcoex_close(void)
 	/* Delete all timers */
 	if (btrtl_coex.polling_enable) {
 		btrtl_coex.polling_enable = 0;
-		del_timer_sync(&(btrtl_coex.polling_timer));
+		timer_delete_sync(&(btrtl_coex.polling_timer));
 	}
 #endif /* RTB_SOFTWARE_MAILBOX */
 
-	del_timer_sync(&btrtl_coex.a2dp_count_timer);
-	del_timer_sync(&btrtl_coex.pan_count_timer);
-	del_timer_sync(&btrtl_coex.hogp_count_timer);
+	timer_delete_sync(&btrtl_coex.a2dp_count_timer);
+	timer_delete_sync(&btrtl_coex.pan_count_timer);
+	timer_delete_sync(&btrtl_coex.hogp_count_timer);
 
 	cancel_delayed_work_sync(&btrtl_coex.fw_work);
 	cancel_delayed_work_sync(&btrtl_coex.l2_work);

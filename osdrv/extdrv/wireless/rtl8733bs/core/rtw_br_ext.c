@@ -17,8 +17,10 @@
 #ifdef __KERNEL__
 	#include <linux/if_arp.h>
 	#include <net/ip.h>
+#ifdef CONFIG_BR_EXT
 	#include <net/ipx.h>
 	#include <linux/atalk.h>
+#endif
 	#include <linux/udp.h>
 	#include <linux/if_pppox.h>
 #endif

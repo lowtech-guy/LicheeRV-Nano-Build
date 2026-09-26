@@ -18,9 +18,13 @@
 
 #include <linux/module.h>
 #include <linux/firmware.h>
-#include <asm/unaligned.h>
-#include <linux/usb.h>
 #include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
+#include <linux/unaligned.h>
+#else
+#include <asm/unaligned.h>
+#endif
+#include <linux/usb.h>
 #include <linux/file.h>
 #include <linux/ctype.h>
 

@@ -57,4 +57,5 @@ CVI_S32 CVI_EFUSE_is_locked(enum CVI_EFUSE_LOCK_E lock);
 CVI_S32 CVI_EFUSE_lock_write(enum CVI_EFUSE_LOCK_E lock);
 CVI_S32 CVI_EFUSE_is_write_locked(enum CVI_EFUSE_LOCK_E lock);
 
+s64 cvi_efuse_read_from_shadow(u32 addr);
 #endif /* _CVI_EFUSE_H */

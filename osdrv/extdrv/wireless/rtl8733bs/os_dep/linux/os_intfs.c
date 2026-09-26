@@ -2072,13 +2072,13 @@ static void rtw_ethtool_get_drvinfo(struct net_device *dev, struct ethtool_drvin
 
 	wdev = dev->ieee80211_ptr;
 	if (wdev) {
-		strlcpy(info->driver, wiphy_dev(wdev->wiphy)->driver->name,
+		strscpy(info->driver, wiphy_dev(wdev->wiphy)->driver->name,
 			sizeof(info->driver));
 	} else {
-		strlcpy(info->driver, "N/A", sizeof(info->driver));
+		strscpy(info->driver, "N/A", sizeof(info->driver));
 	}
 
-	strlcpy(info->version, DRIVERVERSION, sizeof(info->version));
+	strscpy(info->version, DRIVERVERSION, sizeof(info->version));
 
 	padapter = (_adapter *)rtw_netdev_priv(dev);
 	if (padapter) {
@@ -2089,10 +2089,10 @@ static void rtw_ethtool_get_drvinfo(struct net_device *dev, struct ethtool_drvin
 		scnprintf(info->fw_version, sizeof(info->fw_version), "%d.%d",
 			  hal_data->firmware_version, hal_data->firmware_sub_version);
 	} else {
-		strlcpy(info->fw_version, "N/A", sizeof(info->fw_version));
+		strscpy(info->fw_version, "N/A", sizeof(info->fw_version));
 	}
 
-	strlcpy(info->bus_info, dev_name(wiphy_dev(wdev->wiphy)),
+	strscpy(info->bus_info, dev_name(wiphy_dev(wdev->wiphy)),
 		sizeof(info->bus_info));
 }
 
@@ -2179,7 +2179,11 @@ int rtw_os_ndev_register(_adapter *adapter, const char *name)
 	u8 rtnl_lock_needed = rtw_rtnl_lock_needed(dvobj);
 
 #ifdef CONFIG_RTW_NAPI
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
+	netif_napi_add_weight(ndev, &adapter->napi, rtw_recv_napi_poll, RTL_NAPI_WEIGHT);
+#else
 	netif_napi_add(ndev, &adapter->napi, rtw_recv_napi_poll, RTL_NAPI_WEIGHT);
+#endif
 #endif /* CONFIG_RTW_NAPI */
 
 #if defined(CONFIG_IOCTL_CFG80211)

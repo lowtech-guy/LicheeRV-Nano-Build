@@ -4,7 +4,7 @@ ASFLAGS +=\
 	$(CPPFLAGS) \
 	-DRISCV \
 	-D__ASSEMBLY__ \
-	-march=rv64imafdcvxthead -mstrict-align \
+	-march=rv64imafdc_zicsr_zifencei -mstrict-align \
 	-mcmodel=medany \
 	-mabi=lp64d \
 	-ffreestanding  \
@@ -13,7 +13,7 @@ ASFLAGS +=\
 TF_CFLAGS += \
 	$(CPPFLAGS) \
 	-DRISCV \
-	-march=rv64imafdcvxthead \
+	-march=rv64imafdc_zicsr_zifencei \
 	-mcmodel=medany \
 	-mabi=lp64d \
 	-ffreestanding -fno-builtin -Wall -std=gnu99 \

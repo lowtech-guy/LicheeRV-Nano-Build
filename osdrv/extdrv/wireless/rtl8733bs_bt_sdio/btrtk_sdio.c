@@ -779,6 +779,7 @@ static int btsdio_probe(struct sdio_func *func,
 	hdev->bus = HCI_SDIO;
 	hci_set_drvdata(hdev, data);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
 	if (id->class == SDIO_CLASS_BT_AMP)
 		hdev->dev_type = HCI_AMP;
 	else
@@ -786,6 +787,7 @@ static int btsdio_probe(struct sdio_func *func,
 		hdev->dev_type = HCI_BREDR;
 #else
 		hdev->dev_type = HCI_PRIMARY;
+#endif
 #endif
 
 	data->hdev = hdev;
@@ -798,12 +800,16 @@ static int btsdio_probe(struct sdio_func *func,
 	hdev->flush    = btsdio_flush;
 	hdev->send     = btsdio_send_frame;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 1)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
+	hci_set_quirk(hdev, HCI_QUIRK_RESET_ON_CLOSE);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 1)
 	set_bit(HCI_QUIRK_RESET_ON_CLOSE, &hdev->quirks);
 	BT_DBG("set_bit(HCI_QUIRK_RESET_ON_CLOSE, &hdev->quirks);");
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
+	hci_set_quirk(hdev, HCI_QUIRK_SIMULTANEOUS_DISCOVERY);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0)
 	set_bit(HCI_QUIRK_SIMULTANEOUS_DISCOVERY, &hdev->quirks);
 #endif
 
