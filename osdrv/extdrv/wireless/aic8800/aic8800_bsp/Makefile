@@ -74,6 +74,7 @@ $(MODULE_NAME)-y := \
 	aic8800d80_compat.o \
 	aic8800d80x2_compat.o \
 	aic_bsp_main.o \
+	aic_bsp_log_configfs.o \
 	aic_bsp_driver.o \
 	aicsdio.o \
 	aicsdio_txrxif.o \

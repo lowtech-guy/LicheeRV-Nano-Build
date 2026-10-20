@@ -423,6 +423,8 @@ static int __init aicbsp_init(void)
 #if defined CONFIG_PLATFORM_ROCKCHIP || defined CONFIG_PLATFORM_ROCKCHIP2
 	aicbsp_set_subsys(AIC_BLUETOOTH, AIC_PWR_ON);
 #endif
+	if (aic8800_log_configfs_init())
+		pr_warn("aic8800: log level configfs unavailable\n");
 	return 0;
 }
 
@@ -431,6 +433,7 @@ extern struct aic_sdio_dev *aicbsp_sdiodev;
 
 static void __exit aicbsp_exit(void)
 {
+	aic8800_log_configfs_exit();
 #if defined CONFIG_PLATFORM_ROCKCHIP || defined CONFIG_PLATFORM_ROCKCHIP2
     if(aicbsp_sdiodev){
     	aicbsp_sdio_exit();

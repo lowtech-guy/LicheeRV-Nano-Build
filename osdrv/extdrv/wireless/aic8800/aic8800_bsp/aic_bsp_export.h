@@ -64,6 +64,9 @@ extern rf_misc_ram_lite_t loft_res_local;
 #endif
 
 int aicbsp_set_subsys(int, int);
+bool aic8800_log_level(int *mask);
+int aic8800_log_configfs_init(void);
+void aic8800_log_configfs_exit(void);
 int aicbsp_get_feature(struct aicbsp_feature_t *feature, char *fw_path);
 struct sk_buff *aicbsp_resv_mem_alloc_skb(unsigned int length, uint32_t id);
 void aicbsp_resv_mem_kfree_skb(struct sk_buff *skb, uint32_t id);

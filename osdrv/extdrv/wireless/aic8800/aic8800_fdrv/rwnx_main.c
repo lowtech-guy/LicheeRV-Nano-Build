@@ -524,6 +524,18 @@ static const int rwnx_hwq2uapsd[NL80211_NUM_ACS] = {
 extern uint8_t scanning;
 int aicwf_dbg_level = LOGERROR|LOGINFO;
 module_param(aicwf_dbg_level, int, 0660);
+
+void aicwf_dbg_level_set(int mask)
+{
+	WRITE_ONCE(aicwf_dbg_level, mask);
+}
+EXPORT_SYMBOL_GPL(aicwf_dbg_level_set);
+
+int aicwf_dbg_level_get(void)
+{
+	return READ_ONCE(aicwf_dbg_level);
+}
+EXPORT_SYMBOL_GPL(aicwf_dbg_level_get);
 int testmode = 0;
 char aic_fw_path[200];
 u8 chip_sub_id = 0;
@@ -6211,6 +6223,10 @@ void aicwf_hostif_fail(void)
 
 static int __init rwnx_mod_init(void)
 {
+	int log_mask;
+
+	if (aic8800_log_level(&log_mask))
+		aicwf_dbg_level = log_mask;
 	RWNX_DBG(RWNX_FN_ENTRY_STR);
 	rwnx_print_version();
     rwnx_init_cmd_array();
